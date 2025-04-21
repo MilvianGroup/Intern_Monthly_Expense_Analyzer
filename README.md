@@ -69,7 +69,7 @@ The environment variable will override the setting in the config file if both ar
 
 ## Usage
 
-Run the application:
+Run the application once:
 
 ```
 npm start
@@ -80,6 +80,100 @@ For demo mode with sample data:
 ```
 npm start -- --demo
 ```
+
+### Automatic Monitoring
+
+To automatically run the workflow when new files are added to the Google Drive expense folder:
+
+```
+npm run monitor
+```
+
+This will check for new files every 15 minutes. To change the interval:
+
+```
+npm run monitor:5min  # Check every 5 minutes
+```
+
+Or specify a custom interval in minutes:
+
+```
+node src/drive_monitor.js 30  # Check every 30 minutes
+```
+
+You can also set the interval using the `MONITOR_INTERVAL` environment variable in your `.env` file:
+
+```
+MONITOR_INTERVAL=10  # Check every 10 minutes
+```
+
+#### Running as a Background Service
+
+The easiest way to set up the monitor as a background service is to use the interactive setup script:
+
+```
+npm run monitor:setup
+```
+
+This script will:
+1. Check if PM2 is installed and install it if needed
+2. Ask how often you want to check for new files
+3. Configure and start the monitor as a background service
+4. Optionally set up the monitor to start automatically on system boot
+
+##### Option 1: Simple Background Process (No PM2 Required)
+
+If you don't want to install PM2 or encounter issues with it, you can use the simple background process option:
+
+```
+npm run monitor:background
+```
+
+This will:
+1. Start the monitor as a detached process that runs in the background
+2. Continue running even after you close the terminal
+3. Write logs to the `logs` directory
+
+For more frequent checks (every 5 minutes):
+```
+npm run monitor:background:5min
+```
+
+To stop the monitor, you'll need to find and terminate the Node.js process:
+- On Windows: Use Task Manager
+- On macOS/Linux: Use `ps aux | grep drive_monitor` to find the process ID, then `kill <PID>`
+
+##### Option 2: Using PM2 Process Manager
+
+For more advanced process management, you can use PM2:
+
+1. Install PM2 globally:
+   ```
+   npm install -g pm2
+   ```
+
+2. Start the monitor as a daemon:
+   ```
+   npm run monitor:daemon
+   ```
+
+3. For development with more frequent checks (every 5 minutes):
+   ```
+   npm run monitor:daemon:dev
+   ```
+
+4. Useful PM2 commands:
+   ```
+   npm run monitor:status  # Check status of the monitor
+   npm run monitor:logs    # View logs
+   npm run monitor:stop    # Stop the monitor
+   ```
+
+5. To make the monitor start automatically on system boot:
+   ```
+   pm2 startup
+   pm2 save
+   ```
 
 ## Workflow
 
@@ -102,8 +196,12 @@ monthly-financial-project/
 │   ├── mcp/                # MCP servers for external services
 │   ├── utils/              # Helper utilities
 │   ├── workflow/           # LangGraph workflow implementation
+│   ├── drive_monitor.js    # Google Drive folder monitoring script
 │   └── index.js            # Main entry point
 ├── temp/                   # Temporary files
 ├── .env                    # Environment variables (not in repo)
+├── ecosystem.config.js     # PM2 configuration for background services
+├── setup-monitor.js        # Interactive setup script for the monitor
+├── start-monitor.js        # Simple background process script (no PM2)
 └── package.json            # Project dependencies
 ```

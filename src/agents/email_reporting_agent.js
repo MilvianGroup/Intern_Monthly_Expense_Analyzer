@@ -136,11 +136,8 @@ Do not use quotes in your response, just provide the subject line text.
               filename: 'expense_chart.html'
             };
             
-            // Add as attachment
-            attachments.push({
-              filename: 'expense_chart.html',
-              path: visualizations.chartPath
-            });
+            // Don't add HTML chart as attachment since it will be embedded in the email body
+            console.log(`HTML chart will be embedded directly in the email body`);
           } 
           // Fallback to PNG if HTML is not available
           else if (visualizations.chartPath && visualizations.chartPath.endsWith('.png')) {

@@ -138,7 +138,107 @@ class GmailMCP {
       // Determine how to handle the chart in the email
       let chartHtml = '';
       
-
+      // If we have chart info, handle it appropriately
+      if (chartInfo) {
+        if (chartInfo.type === 'html' && chartInfo.path && fs.existsSync(chartInfo.path)) {
+          // Read the HTML chart file
+          const chartContent = fs.readFileSync(chartInfo.path, 'utf8');
+          
+          // Extract the chart data from the HTML file
+          const totalMatch = chartContent.match(/<div class="total">Total: \$([\d.]+)<\/div>/);
+          const total = totalMatch ? parseFloat(totalMatch[1]) : 0;
+          
+          // Extract labels and data from the chart
+          const labelsMatch = chartContent.match(/labels: \[(.*?)\]/);
+          const dataMatch = chartContent.match(/data: \[(.*?)\]/);
+          const colorsMatch = chartContent.match(/backgroundColor: \[(.*?)\]/);
+          
+          if (labelsMatch && dataMatch && colorsMatch) {
+            // Parse the extracted data
+            const labels = JSON.parse(`[${labelsMatch[1]}]`);
+            const data = JSON.parse(`[${dataMatch[1]}]`);
+            const colors = JSON.parse(`[${colorsMatch[1]}]`);
+            
+            // Create a static HTML table representation of the chart data
+            let tableRows = '';
+            let totalAmount = 0;
+            
+            for (let i = 0; i < labels.length; i++) {
+              const value = data[i];
+              totalAmount += value;
+              const percentage = ((value / total) * 100).toFixed(1);
+              const color = colors[i];
+              
+              tableRows += `
+                <tr>
+                  <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">
+                    <span style="display: inline-block; width: 12px; height: 12px; background-color: ${color}; margin-right: 5px;"></span>
+                    ${labels[i]}
+                  </td>
+                  <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$${value.toFixed(2)}</td>
+                  <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">${percentage}%</td>
+                </tr>
+              `;
+            }
+            
+            // Create the chart HTML with both static table and interactive chart
+            chartHtml = `
+              <div class="chart-container" style="margin: 20px 0; text-align: center;">
+                <h2>Expense Visualization</h2>
+                
+                <!-- Static chart information -->
+                <div style="max-width: 600px; margin: 0 auto; background-color: #f9f9f9; padding: 15px; border-radius: 5px;">
+                  <p>Your expense breakdown is embedded directly in this email.</p>
+                  
+                  <!-- Static representation of the chart data -->
+                  <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                    <tr style="background-color: #eaeaea;">
+                      <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Category</th>
+                      <th style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">Amount</th>
+                      <th style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">Percentage</th>
+                    </tr>
+                    ${tableRows}
+                    <tr style="background-color: #eaeaea; font-weight: bold;">
+                      <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Total</td>
+                      <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$${total.toFixed(2)}</td>
+                      <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">100.0%</td>
+                    </tr>
+                  </table>
+                </div>
+              </div>
+            `;
+          } else {
+            // Extract just the chart container part from the HTML file
+            const chartMatch = chartContent.match(/<div class="container">([\s\S]*?)<\/div>\s*<script>/);
+            
+            if (chartMatch && chartMatch[1]) {
+              // Use the extracted chart HTML
+              chartHtml = `
+                <div class="chart-container" style="margin: 20px 0; text-align: center;">
+                  <h2>Expense Visualization</h2>
+                  ${chartMatch[1]}
+                </div>
+              `;
+            } else {
+              // Fallback to a message about the chart
+              chartHtml = `
+                <div class="chart-container" style="margin: 20px 0; text-align: center;">
+                  <h2>Expense Visualization</h2>
+                  <p>An expense chart visualization is included in this report.</p>
+                </div>
+              `;
+            }
+          }
+        } else if (chartInfo.type === 'png' && chartInfo.path) {
+          // For PNG charts, embed using CID reference
+          chartHtml = `
+            <div class="chart-container" style="margin: 20px 0; text-align: center;">
+              <h2>Expense Visualization</h2>
+              <img src="cid:expense-chart" alt="Expense Chart" style="max-width: 100%; height: auto;" />
+            </div>
+          `;
+        }
+      }
       
       // Create HTML content
       const htmlContent = `

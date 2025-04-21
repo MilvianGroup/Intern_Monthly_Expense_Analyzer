@@ -8,6 +8,16 @@
     "demo": "node src/index.js --demo",
     "auth": "node src/auth_server.js",
     "send-test-email": "node src/examples/send_email_oauth.js",
+    "monitor": "node src/drive_monitor.js",
+    "monitor:5min": "node src/drive_monitor.js 5",
+    "monitor:setup": "node setup-monitor.js",
+    "monitor:background": "node start-monitor.js",
+    "monitor:background:5min": "node start-monitor.js 5",
+    "monitor:daemon": "pm2 start ecosystem.config.js",
+    "monitor:daemon:dev": "pm2 start ecosystem.config.js --env development",
+    "monitor:stop": "pm2 stop expense-monitor",
+    "monitor:status": "pm2 status expense-monitor",
+    "monitor:logs": "pm2 logs expense-monitor",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
@@ -22,6 +32,9 @@
     "langchain": "^0.1.0",
     "nodemailer": "^6.9.0",
     "puppeteer": "^21.0.0"
+  },
+  "devDependencies": {
+    "pm2": "^5.3.0"
   },
   "engines": {
     "node": ">=18.0.0"
