@@ -1,0 +1,19 @@
+{
+  "user": {
+    "email": "armansahota05@gmail.com ",
+    "name": "Arman Sahota"
+  },
+  "google_drive": {
+    "expense_file_path": "expense_folder"
+  },
+  "aws": {
+    "region": "us-west-2",
+    "bedrock_model_id": "anthropic.claude-3-sonnet-20240229-v1:0"
+  },
+  "report": {
+    "title": "Monthly Expense Analysis",
+    "subject": "Your Monthly Expense Report",
+    "include_chart": true,
+    "include_recommendations": true
+  }
+}

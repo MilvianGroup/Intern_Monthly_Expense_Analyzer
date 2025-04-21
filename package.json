@@ -1,0 +1,29 @@
+{
+  "name": "monthly-financial-project",
+  "version": "1.0.0",
+  "description": "Monthly financial analysis and reporting system",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "demo": "node src/index.js --demo",
+    "auth": "node src/auth_server.js",
+    "send-test-email": "node src/examples/send_email_oauth.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.0.0",
+    "@langchain/core": "^0.1.0",
+    "@langchain/langgraph": "^0.0.6",
+    "chart.js": "^4.0.0",
+    "csv-parser": "^3.0.0",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.2",
+    "googleapis": "^126.0.0",
+    "langchain": "^0.1.0",
+    "nodemailer": "^6.9.0",
+    "puppeteer": "^21.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
