@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Financial Project Workflow Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .mermaid {
+            margin: 20px 0;
+        }
+        .description {
+            margin-top: 30px;
+        }
+        .description h2 {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .description ul {
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Monthly Financial Project Workflow</h1>
+        
+        <h2>LangGraph Workflow Diagram</h2>
+        <div class="mermaid">
+graph TD
+    Start[Start] --> RetrieveExpense[Retrieve Expense Report]
+    RetrieveExpense --> AnalyzeExpense[Analyze Expense Data]
+    AnalyzeExpense --> CreateVisualization[Create Visualizations]
+    CreateVisualization --> PrintSummary[Print Summary]
+    PrintSummary --> SendEmailReport[Send Email Report]
+    SendEmailReport --> End[End]
+    
+    subgraph "State"
+        State1[expenseReportPath]
+        State2[analysisResults]
+        State3[visualizationResults]
+        State4[emailResult]
+        State5[googleDriveMCP]
+        State6[gmailMCP]
+        State7[isDemoMode]
+    end
+    
+    RetrieveExpense -- Updates --> State1
+    AnalyzeExpense -- Updates --> State2
+    CreateVisualization -- Updates --> State2
+    CreateVisualization -- Updates --> State3
+    SendEmailReport -- Updates --> State4
+    
+    State1 -- Input for --> AnalyzeExpense
+    State2 -- Input for --> CreateVisualization
+    State2 -- Input for --> SendEmailReport
+    State3 -- Input for --> SendEmailReport
+    State5 -- Input for --> RetrieveExpense
+    State6 -- Input for --> SendEmailReport
+    State7 -- Affects --> RetrieveExpense
+    State7 -- Affects --> SendEmailReport
+        </div>
+
+        <div class="description">
+            <h2>Node Descriptions</h2>
+            <ul>
+                <li><strong>Retrieve Expense Report</strong>: Fetches expense data from Google Drive or uses sample data in demo mode</li>
+                <li><strong>Analyze Expense Data</strong>: Processes the expense data to find patterns and generate recommendations</li>
+                <li><strong>Create Visualizations</strong>: Creates charts and visualizations of the expense data</li>
+                <li><strong>Print Summary</strong>: Displays a summary of the analysis results</li>
+                <li><strong>Send Email Report</strong>: Sends the analysis results and visualizations via email</li>
+            </ul>
+
+            <h2>State Management</h2>
+            <ul>
+                <li><strong>expenseReportPath</strong>: Path to the retrieved expense report CSV file</li>
+                <li><strong>analysisResults</strong>: Results of the expense analysis including summary and recommendations</li>
+                <li><strong>visualizationResults</strong>: Paths to generated visualization files</li>
+                <li><strong>emailResult</strong>: Status of the email sending operation</li>
+                <li><strong>googleDriveMCP</strong>: Google Drive MCP instance for file operations</li>
+                <li><strong>gmailMCP</strong>: Gmail MCP instance for sending emails</li>
+                <li><strong>isDemoMode</strong>: Flag indicating if the workflow is running in demo mode</li>
+            </ul>
+
+            <h3>State Details</h3>
+            <div class="state-details">
+                <div class="state-item">
+                    <h4>expenseReportPath</h4>
+                    <p>Path to the retrieved expense report CSV file</p>
+                    <pre class="state-example">"/path/to/expense_report.csv"</pre>
+                </div>
+                <div class="state-item">
+                    <h4>analysisResults</h4>
+                    <p>Results of the expense analysis including summary and recommendations</p>
+                    <pre class="state-example">{
+  "summary": {
+    "total": 12345.67,
+    "count": 42,
+    "categories": {
+      "Office Supplies": 2345.67,
+      "Travel": 5000.00,
+      "Meals": 3000.00,
+      "Other": 2000.00
+    }
+  },
+  "recommendations": [
+    "Reduce travel expenses by 10%",
+    "Consider bulk purchasing office supplies",
+    "Review meal expense policy"
+  ]
+}</pre>
+                </div>
+                <div class="state-item">
+                    <h4>visualizationResults</h4>
+                    <p>Paths to generated visualization files</p>
+                    <pre class="state-example">{
+  "chartPath": "output/expense_chart.png",
+  "reportPath": "output/expense_report.pdf"
+}</pre>
+                </div>
+                <div class="state-item">
+                    <h4>emailResult</h4>
+                    <p>Status of the email sending operation</p>
+                    <pre class="state-example">{
+  "success": true,
+  "messageId": "1234567890",
+  "sentTo": "finance@example.com"
+}</pre>
+                </div>
+                <div class="state-item">
+                    <h4>googleDriveMCP</h4>
+                    <p>Google Drive MCP instance for file operations</p>
+                    <pre class="state-example">// Google Drive MCP instance object</pre>
+                </div>
+                <div class="state-item">
+                    <h4>gmailMCP</h4>
+                    <p>Gmail MCP instance for sending emails</p>
+                    <pre class="state-example">// Gmail MCP instance object</pre>
+                </div>
+                <div class="state-item">
+                    <h4>isDemoMode</h4>
+                    <p>Flag indicating if the workflow is running in demo mode</p>
+                    <pre class="state-example">true</pre>
+                </div>
+            </div>
+
+            <h2>Benefits of LangGraph</h2>
+            <ul>
+                <li><strong>Explicit State Management</strong>: State is explicitly defined and passed between nodes</li>
+                <li><strong>Declarative Workflow</strong>: The workflow is defined as a graph with clear node relationships</li>
+                <li><strong>Error Handling</strong>: Each node can handle errors independently</li>
+                <li><strong>Visualization</strong>: The workflow can be visualized as a graph</li>
+                <li><strong>Flexibility</strong>: Nodes can be rearranged or modified without changing the overall structure</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: false,
+                htmlLabels: true
+            }
+        });
+    </script>
+</body>
+</html>

@@ -187,21 +187,33 @@ For more advanced process management, you can use PM2:
 ```
 monthly-financial-project/
 ├── config/                 # Configuration files
+│   ├── config.json         # Main configuration file
+│   ├── ecosystem.config.js # PM2 configuration for background services
+│   ├── langgraph/          # LangGraph configuration files
+│   └── mermaid/            # Mermaid workflow configuration files
 ├── credentials/            # API credentials (not in repo)
 ├── docs/                   # Documentation files
-│   └── workflow_diagram.md # LangGraph workflow visualization
+│   ├── workflow_diagram.md # LangGraph workflow visualization
+│   ├── GOOGLE_API_SETUP_GUIDE.md
+│   ├── LANGGRAPH_STUDIO_GUIDE.md
+│   ├── NON_DEMO_MODE_SETUP.md
+│   └── Arman_PoC.drawio    # Original project diagram
 ├── output/                 # Generated reports and visualizations
+├── scripts/                # Utility scripts
+│   ├── setup-monitor.js    # Interactive setup script for the monitor
+│   └── start-monitor.js    # Simple background process script (no PM2)
 ├── src/
 │   ├── agents/             # AI agents for different tasks
+│   ├── examples/           # Example code
 │   ├── mcp/                # MCP servers for external services
 │   ├── utils/              # Helper utilities
 │   ├── workflow/           # LangGraph workflow implementation
+│   ├── auth_server.js      # Authentication server
 │   ├── drive_monitor.js    # Google Drive folder monitoring script
-│   └── index.js            # Main entry point
+│   ├── index.js            # Main entry point
+│   ├── langgraph_export.js # LangGraph export utilities
+│   └── mermaid_export.js   # Mermaid export utilities
 ├── temp/                   # Temporary files
 ├── .env                    # Environment variables (not in repo)
-├── ecosystem.config.js     # PM2 configuration for background services
-├── setup-monitor.js        # Interactive setup script for the monitor
-├── start-monitor.js        # Simple background process script (no PM2)
 └── package.json            # Project dependencies
 ```

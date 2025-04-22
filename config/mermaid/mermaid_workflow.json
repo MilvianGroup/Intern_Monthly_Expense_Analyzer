@@ -1,0 +1,62 @@
+{
+  "name": "Monthly Financial Project Workflow",
+  "description": "Workflow for processing monthly financial data",
+  "mermaid": "graph TD\n    Start[Start] --> RetrieveExpense[Retrieve Expense Report]\n    RetrieveExpense --> AnalyzeExpense[Analyze Expense Data]\n    AnalyzeExpense --> CreateVisualization[Create Visualizations]\n    CreateVisualization --> PrintSummary[Print Summary]\n    PrintSummary --> SendEmailReport[Send Email Report]\n    SendEmailReport --> End[End]\n    \n    subgraph \"State\"\n        State1[expenseReportPath]\n        State2[analysisResults]\n        State3[visualizationResults]\n        State4[emailResult]\n        State5[googleDriveMCP]\n        State6[gmailMCP]\n        State7[isDemoMode]\n    end\n    \n    RetrieveExpense -- Updates --> State1\n    AnalyzeExpense -- Updates --> State2\n    CreateVisualization -- Updates --> State2\n    CreateVisualization -- Updates --> State3\n    SendEmailReport -- Updates --> State4\n    \n    State1 -- Input for --> AnalyzeExpense\n    State2 -- Input for --> CreateVisualization\n    State2 -- Input for --> SendEmailReport\n    State3 -- Input for --> SendEmailReport\n    State5 -- Input for --> RetrieveExpense\n    State6 -- Input for --> SendEmailReport\n    State7 -- Affects --> RetrieveExpense\n    State7 -- Affects --> SendEmailReport",
+  "nodes": [
+    {
+      "id": "RetrieveExpense",
+      "name": "Retrieve Expense Report",
+      "description": "Fetches expense data from Google Drive or uses sample data in demo mode"
+    },
+    {
+      "id": "AnalyzeExpense",
+      "name": "Analyze Expense Data",
+      "description": "Processes the expense data to find patterns and generate recommendations"
+    },
+    {
+      "id": "CreateVisualization",
+      "name": "Create Visualizations",
+      "description": "Creates charts and visualizations of the expense data"
+    },
+    {
+      "id": "PrintSummary",
+      "name": "Print Summary",
+      "description": "Displays a summary of the analysis results"
+    },
+    {
+      "id": "SendEmailReport",
+      "name": "Send Email Report",
+      "description": "Sends the analysis results and visualizations via email"
+    }
+  ],
+  "state": {
+    "expenseReportPath": {
+      "description": "Path to the retrieved expense report CSV file",
+      "default": null
+    },
+    "analysisResults": {
+      "description": "Results of the expense analysis including summary and recommendations",
+      "default": null
+    },
+    "visualizationResults": {
+      "description": "Paths to generated visualization files",
+      "default": null
+    },
+    "emailResult": {
+      "description": "Status of the email sending operation",
+      "default": null
+    },
+    "googleDriveMCP": {
+      "description": "Google Drive MCP instance for file operations",
+      "default": null
+    },
+    "gmailMCP": {
+      "description": "Gmail MCP instance for sending emails",
+      "default": null
+    },
+    "isDemoMode": {
+      "description": "Flag indicating if the workflow is running in demo mode",
+      "default": false
+    }
+  }
+}

@@ -29,7 +29,7 @@ const outLog = fs.openSync(path.join(logsDir, 'monitor-out.log'), 'a');
 const errLog = fs.openSync(path.join(logsDir, 'monitor-err.log'), 'a');
 
 // Start the monitor as a detached process
-const monitor = spawn('node', [path.join(__dirname, 'src/drive_monitor.js'), interval.toString()], {
+const monitor = spawn('node', [path.join(__dirname, '../src/drive_monitor.js'), interval.toString()], {
   detached: true,
   stdio: ['ignore', outLog, errLog]
 });

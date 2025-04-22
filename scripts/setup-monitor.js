@@ -74,7 +74,7 @@ function installPM2() {
  * @param {number} interval - The interval in minutes
  */
 function updateEcosystemConfig(interval) {
-  const configPath = path.join(__dirname, 'ecosystem.config.js');
+  const configPath = path.join(__dirname, '../config/ecosystem.config.js');
   
   if (!fs.existsSync(configPath)) {
     console.error('ecosystem.config.js not found. Please make sure you are running this script from the project root directory.');
@@ -196,7 +196,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 
 // Start the monitor as a detached process
-const monitor = spawn('node', [path.join(__dirname, 'src/drive_monitor.js'), '${interval}'], {
+const monitor = spawn('node', [path.join(__dirname, '../src/drive_monitor.js'), '${interval}'], {
   detached: true,
   stdio: 'ignore'
 });
