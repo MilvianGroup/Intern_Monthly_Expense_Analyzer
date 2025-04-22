@@ -73,6 +73,16 @@ The LangGraph workflow maintains state between nodes:
 - **gmailMCP**: Gmail MCP instance for sending emails
 - **isDemoMode**: Flag indicating if the workflow is running in demo mode
 
+## Color Legend
+
+The diagram uses different colors to represent different types of nodes:
+
+- **Blue** (![#4285F4](https://via.placeholder.com/15/4285F4/000000?text=+) `#4285F4`): Process Nodes - Main workflow steps that perform actions
+- **Green** (![#34A853](https://via.placeholder.com/15/34A853/000000?text=+) `#34A853`): State Nodes - Data elements that store workflow state
+- **Red** (![#EA4335](https://via.placeholder.com/15/EA4335/000000?text=+) `#EA4335`): Endpoint Nodes - Start and end points of the workflow
+- **Yellow** (![#FBBC05](https://via.placeholder.com/15/FBBC05/000000?text=+) `#FBBC05`): MCP Nodes - Model Context Protocol service connections
+- **Purple** (![#9C27B0](https://via.placeholder.com/15/9C27B0/000000?text=+) `#9C27B0`): Config Nodes - Configuration settings that affect workflow behavior
+
 ## Benefits of LangGraph
 
 - **Explicit State Management**: State is explicitly defined and passed between nodes
