@@ -56,39 +56,22 @@ class EmailReportingAgent {
   }
 
   /**
-   * Generate a personalized email subject
+   * Generate a simple email subject with the expense report filename
    * @param {Object} analysisResults - Results from the Analysis Agent
    * @returns {Promise<string>} - Email subject
    */
   async generateEmailSubject(analysisResults) {
     try {
-      const { summary } = analysisResults;
+      // Get the expense report filename
+      let expenseFilename = "Monthly Expense Report";
       
-      if (!summary) {
-        return config.report.subject;
+      // If we have access to the original expense report path through analysisResults
+      if (analysisResults.expenseReportPath) {
+        expenseFilename = path.basename(analysisResults.expenseReportPath);
       }
       
-      // Get the top spending category
-      const topCategory = Object.entries(summary.categories)
-        .sort((a, b) => b[1] - a[1])[0][0];
-      
-      // Create a prompt for the AI model
-      const prompt = `
-Generate a brief, engaging email subject line for a monthly expense report email. 
-The total expenses for the month were $${summary.total.toFixed(2)}, and the top spending category was "${topCategory}".
-Make it personalized and interesting, but keep it under 60 characters.
-Do not use quotes in your response, just provide the subject line text.
-`;
-      
-      const aiResponse = await this.invokeModel(prompt);
-      
-      // Clean up the response
-      const subject = aiResponse
-        .trim()
-        .replace(/^["']|["']$/g, '') // Remove quotes if present
-        .replace(/^Subject:?\s*/i, ''); // Remove "Subject:" prefix if present
-      
-      return subject || config.report.subject;
+      // Create a simple subject with the filename
+      return `Expense report for ${expenseFilename}`;
     } catch (error) {
       console.error('Error generating email subject:', error);
       return config.report.subject;
@@ -112,6 +95,9 @@ Do not use quotes in your response, just provide the subject line text.
       
       const { recommendations, analysisPath, visualizations } = analysisResults;
       
+      // Debug log to see what's in the visualizations object
+      console.log('Visualizations object:', JSON.stringify(visualizations, null, 2));
+      
       // Generate a personalized email subject
       const subject = await this.generateEmailSubject(analysisResults);
       
@@ -124,39 +110,42 @@ Do not use quotes in your response, just provide the subject line text.
         const attachments = [];
         let chartInfo = null;
         
-        if (visualizations) {
-          // Prioritize HTML chart over PNG
-          if (visualizations.chartPath && visualizations.chartPath.endsWith('.html')) {
-            console.log(`Adding HTML chart to email: ${visualizations.chartPath}`);
-            
-            // Store chart info for the email template
-            chartInfo = {
-              type: 'html',
-              path: visualizations.chartPath,
-              filename: 'expense_chart.html'
-            };
-            
-            // Don't add HTML chart as attachment since it will be embedded in the email body
-            console.log(`HTML chart will be embedded directly in the email body`);
-          } 
-          // Fallback to PNG if HTML is not available
-          else if (visualizations.chartPath && visualizations.chartPath.endsWith('.png')) {
-            console.log(`Adding PNG chart to email: ${visualizations.chartPath}`);
-            
-            // Store chart info for the email template
-            chartInfo = {
-              type: 'png',
-              path: visualizations.chartPath,
-              filename: 'expense_chart.png'
-            };
-            
-            // Add as attachment with CID for embedding
-            attachments.push({
-              filename: 'expense_chart.png',
-              path: visualizations.chartPath,
-              cid: 'expense-chart' // Content ID for embedding in HTML
-            });
-          }
+        // Always use the PNG chart from the output directory with CID attachment
+        const pngChartPath = path.join(__dirname, '../../output/expense_chart.png');
+        
+        if (fs.existsSync(pngChartPath)) {
+          console.log(`Using PNG chart from output directory: ${pngChartPath}`);
+          
+          // Add as attachment with CID for embedding in HTML
+          attachments.push({
+            filename: 'expense_chart.png',
+            path: pngChartPath,
+            cid: 'expense-chart' // Content ID for embedding in HTML
+          });
+          
+          // Store chart info for the email template
+          chartInfo = {
+            type: 'png',
+            path: pngChartPath,
+            filename: 'expense_chart.png',
+            summary: analysisResults.summary // Include the summary data for the table
+          };
+          
+          console.log(`Chart will be embedded in the email body using CID reference`);
+        }
+        // Fallback to HTML if PNG is not available
+        else if (visualizations && visualizations.chartPath && visualizations.chartPath.endsWith('.html')) {
+          console.log(`Adding HTML chart to email: ${visualizations.chartPath}`);
+          
+          // Store chart info for the email template
+          chartInfo = {
+            type: 'html',
+            path: visualizations.chartPath,
+            filename: 'expense_chart.html'
+          };
+          
+          // Don't add HTML chart as attachment since it will be embedded in the email body
+          console.log(`HTML chart will be embedded directly in the email body`);
         }
         
         // Local MCP instance
@@ -164,6 +153,7 @@ Do not use quotes in your response, just provide the subject line text.
           to: config.user.email,
           subject,
           reportPath: analysisPath,
+          expenseReportPath: analysisResults.expenseReportPath, // Pass the original expense report path
           recommendations,
           attachments: attachments,
           chartInfo: chartInfo

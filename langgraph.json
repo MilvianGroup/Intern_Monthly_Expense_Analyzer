@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "graphs": {
+    "monthly-financial-workflow": "src/langgraph_export.js:financialWorkflow"
+  }
+}

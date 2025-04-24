@@ -7,6 +7,8 @@
 
 const { StateGraph, END } = require('@langchain/langgraph');
 const { RunnableSequence } = require('@langchain/core/runnables');
+// We'll use environment variables for LangSmith tracing
+// LangChain will automatically use these when they're set
 
 // Import agents
 const ExpenseRetrieverAgent = require('../agents/expense_retriever_agent');
@@ -74,28 +76,70 @@ function createFinancialWorkflow() {
       const { createSampleExpenseReport } = require('../utils/helpers');
       const path = require('path');
       
-      const expenseReportPath = createSampleExpenseReport(
+      const csvPath = createSampleExpenseReport(
         path.join(__dirname, '../../temp/sample_expenses.csv')
       );
+      
+      // Return in the new format with file type information
+      const expenseReportPath = {
+        filePath: csvPath,
+        fileType: 'csv',
+        metadata: {
+          headers: ['date', 'amount', 'category', 'description'],
+          source: 'sample'
+        }
+      };
       
       return { expenseReportPath };
     } else {
       try {
-        const expenseReportPath = await retrieveExpense(googleDriveMCP);
+        const expenseReportInfo = await retrieveExpense(googleDriveMCP);
         
-        if (!expenseReportPath) {
+        if (!expenseReportInfo) {
           throw new Error('Failed to retrieve expense report');
         }
         
-        return { expenseReportPath };
+        // If the result is already in the new format (object with filePath, fileType, metadata)
+        if (typeof expenseReportInfo === 'object' && expenseReportInfo.filePath) {
+          return { expenseReportPath: expenseReportInfo };
+        } 
+        // If it's in the old format (just a string path)
+        else if (typeof expenseReportInfo === 'string') {
+          // Convert to new format
+          const extension = path.extname(expenseReportInfo).toLowerCase();
+          let fileType = 'unknown';
+          
+          if (extension === '.csv') fileType = 'csv';
+          else if (extension === '.pdf') fileType = 'pdf';
+          else if (extension === '.xlsx' || extension === '.xls') fileType = 'excel';
+          else if (extension === '.ofx' || extension === '.qfx') fileType = 'bank_statement';
+          
+          const expenseReportPath = {
+            filePath: expenseReportInfo,
+            fileType: fileType,
+            metadata: {}
+          };
+          
+          return { expenseReportPath };
+        }
       } catch (error) {
         console.log('Falling back to sample data for demonstration');
         const { createSampleExpenseReport } = require('../utils/helpers');
         const path = require('path');
         
-        const expenseReportPath = createSampleExpenseReport(
+        const csvPath = createSampleExpenseReport(
           path.join(__dirname, '../../temp/sample_expenses.csv')
         );
+        
+        // Return in the new format with file type information
+        const expenseReportPath = {
+          filePath: csvPath,
+          fileType: 'csv',
+          metadata: {
+            headers: ['date', 'amount', 'category', 'description'],
+            source: 'sample'
+          }
+        };
         
         return { expenseReportPath };
       }
@@ -107,10 +151,29 @@ function createFinancialWorkflow() {
     
     const { expenseReportPath } = state;
     
-    const analysisResults = await analyzeExpense(expenseReportPath);
+    // Check if expenseReportPath is an object (new format) or a string (old format)
+    let expenseReportInfo;
+    if (typeof expenseReportPath === 'string') {
+      // Old format - just a file path
+      expenseReportInfo = expenseReportPath;
+    } else {
+      // New format - object with filePath, fileType, and metadata
+      expenseReportInfo = expenseReportPath;
+    }
+    
+    const analysisResults = await analyzeExpense(expenseReportInfo);
     
     if (!analysisResults) {
       throw new Error('Failed to analyze expense data');
+    }
+    
+    // Add the original expense report info to the analysis results
+    // This will be used by the email reporting agent to include the filename in the subject
+    if (typeof expenseReportPath === 'string') {
+      analysisResults.expenseReportPath = expenseReportPath;
+    } else {
+      analysisResults.expenseReportInfo = expenseReportPath;
+      analysisResults.expenseReportPath = expenseReportPath.filePath;
     }
     
     return { analysisResults };
@@ -226,6 +289,7 @@ async function runFinancialWorkflow(options = {}) {
     
     // Initialize the workflow
     const workflow = createFinancialWorkflow();
+    
     
     // Initialize state
     const initialState = {

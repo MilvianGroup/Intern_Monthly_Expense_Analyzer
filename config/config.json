@@ -1,6 +1,6 @@
 {
   "user": {
-    "email": "armansahota05@gmail.com ",
+    "email": "armansahota05@gmail.com",
     "name": "Arman Sahota"
   },
   "google_drive": {
@@ -15,5 +15,29 @@
     "subject": "Your Monthly Expense Report",
     "include_chart": true,
     "include_recommendations": true
+  },
+  "file_types": {
+    "supported": ["csv", "pdf", "excel", "bank_statement"],
+    "csv": {
+      "required_columns": ["date", "amount", "category", "description"]
+    },
+    "pdf": {
+      "extraction_method": "bedrock",
+      "max_pages": 20
+    },
+    "excel": {
+      "sheet_name": "Expenses",
+      "extraction_method": "bedrock"
+    },
+    "bank_statement": {
+      "description": "Financial documents from banks showing account transactions, including OFX/QFX files and bank-provided PDFs with transaction details",
+      "supported_formats": [".ofx", ".qfx", ".pdf", ".csv", ".xlsx"],
+      "supported_banks": ["Bank of America", "Chase", "Wells Fargo", "Citibank"],
+      "extraction_method": "bedrock",
+      "transaction_types": {
+        "expenses": ["debit", "payment", "withdrawal", "purchase"],
+        "income": ["credit", "deposit", "refund", "transfer"]
+      }
+    }
   }
 }

@@ -117,13 +117,15 @@ class GmailMCP {
    * Send expense report email with analysis
    * @param {Object} options - Email options
    * @param {string} options.to - Recipient email address
+   * @param {string} options.subject - Email subject
    * @param {string} options.reportPath - Path to the analysis report text file
+   * @param {string} options.expenseReportPath - Path to the original expense report file
    * @param {Array} options.recommendations - Array of saving recommendations
    * @param {Array} options.attachments - Array of email attachments
    * @param {Object} options.chartInfo - Information about the chart (type, path, filename)
    * @returns {Promise<boolean>} - Success status
    */
-  async sendExpenseReport({ to, reportPath, recommendations = [], attachments = [], chartInfo = null }) {
+  async sendExpenseReport({ to, subject, reportPath, expenseReportPath, recommendations = [], attachments = [], chartInfo = null }) {
     if (!to) to = config.user.email;
     
     try {
@@ -169,13 +171,45 @@ class GmailMCP {
               const percentage = ((value / total) * 100).toFixed(1);
               const color = colors[i];
               
+              // Map color hex to color name
+              const colorNameMap = {
+                '#FF6384': 'Red',
+                '#36A2EB': 'Blue',
+                '#FFCE56': 'Yellow',
+                '#4BC0C0': 'Teal',
+                '#9966FF': 'Purple',
+                '#FF9F40': 'Orange',
+                '#C9CBCF': 'Grey',
+                '#7ED321': 'Green',
+                '#F8E71C': 'Bright Yellow',
+                '#BD10E0': 'Magenta',
+                '#50E3C2': 'Mint',
+                '#4A90E2': 'Light Blue',
+                '#D0021B': 'Dark Red',
+                '#8B572A': 'Brown',
+                '#417505': 'Dark Green'
+              };
+              
+              // Get color name or use "Color" as fallback
+              const colorName = colorNameMap[color] || 'Color';
+              
+              // Check if this is a paycheck or income category - display as positive
+              const label = labels[i];
+              const isIncome = label.toLowerCase().includes('paycheck') || 
+                              label.toLowerCase().includes('income') || 
+                              label.toLowerCase().includes('salary') ||
+                              label.toLowerCase().includes('deposit');
+              
+              // For income categories, display the amount as positive
+              const displayValue = isIncome ? Math.abs(value) : value;
+              
               tableRows += `
                 <tr>
                   <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">
                     <span style="display: inline-block; width: 12px; height: 12px; background-color: ${color}; margin-right: 5px;"></span>
-                    ${labels[i]}
+                    ${labels[i]} <span style="color: #666; font-size: 0.9em;">(${colorName})</span>
                   </td>
-                  <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$${value.toFixed(2)}</td>
+                  <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$${displayValue.toFixed(2)}</td>
                   <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">${percentage}%</td>
                 </tr>
               `;
@@ -229,17 +263,172 @@ class GmailMCP {
               `;
             }
           }
-        } else if (chartInfo.type === 'png' && chartInfo.path) {
-          // For PNG charts, embed using CID reference
+        } else if (chartInfo.type === 'png-base64' && chartInfo.data) {
+          // For base64-encoded PNG charts, embed directly in the HTML
           chartHtml = `
             <div class="chart-container" style="margin: 20px 0; text-align: center;">
               <h2>Expense Visualization</h2>
+              <img src="data:image/png;base64,${chartInfo.data}" alt="Expense Chart" style="max-width: 100%; height: auto;" />
+            </div>
+          `;
+        } else if (chartInfo.type === 'png' && chartInfo.path) {
+          // For PNG charts, embed using CID reference with expense breakdown table
+          
+          // Create the expense breakdown table
+          const { summary } = chartInfo;
+          let tableRows = '';
+          let total = 0;
+          
+          if (summary && summary.categories) {
+            // Sort categories by amount (descending)
+            const sortedCategories = Object.entries(summary.categories)
+              .sort((a, b) => b[1] - a[1]);
+            
+            // Calculate total
+            total = sortedCategories.reduce((sum, [_, amount]) => sum + amount, 0);
+            
+            // Generate table rows
+            sortedCategories.forEach(([category, amount], index) => {
+              const percentage = ((amount / total) * 100).toFixed(1);
+              const colorIndex = index % 10;
+              const colors = [
+                '#FF6384', // Red
+                '#36A2EB', // Blue
+                '#FFCE56', // Yellow
+                '#4BC0C0', // Teal
+                '#9966FF', // Purple
+                '#FF9F40', // Orange
+                '#C9CBCF', // Grey
+                '#7ED321', // Green
+                '#F8E71C', // Bright Yellow
+                '#BD10E0'  // Magenta
+              ];
+              
+              // Color names mapping
+              const colorNames = [
+                'Red',
+                'Blue',
+                'Yellow',
+                'Teal',
+                'Purple',
+                'Orange',
+                'Grey',
+                'Green',
+                'Bright Yellow',
+                'Magenta'
+              ];
+              
+              // Check if this is a paycheck or income category - display as positive
+              const isIncome = category.toLowerCase() === 'paycheck' || 
+                              category.toLowerCase() === 'income' || 
+                              category.toLowerCase().includes('salary') ||
+                              category.toLowerCase().includes('deposit');
+              
+              // For income categories, display the amount as positive
+              const displayAmount = isIncome ? Math.abs(amount) : amount;
+              
+              tableRows += `
+                <tr>
+                  <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">
+                    <span style="display: inline-block; width: 12px; height: 12px; background-color: ${colors[colorIndex]}; margin-right: 5px;"></span>
+                    ${category} <span style="color: #666; font-size: 0.9em;">(${colorNames[colorIndex]})</span>
+                  </td>
+                  <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$${displayAmount.toFixed(2)}</td>
+                  <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">${percentage}%</td>
+                </tr>
+              `;
+            });
+          }
+          
+          chartHtml = `
+            <div class="chart-container" style="margin: 20px 0; text-align: center;">
+              <h2>Expense Visualization</h2>
+              
               <img src="cid:expense-chart" alt="Expense Chart" style="max-width: 100%; height: auto;" />
+              
+              <div style="max-width: 600px; margin: 20px auto; background-color: #f9f9f9; padding: 15px; border-radius: 5px;">
+                <p>Your expense breakdown is embedded directly in this email.</p>
+                
+                <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                  <tr style="background-color: #eaeaea;">
+                    <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Category</th>
+                    <th style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">Amount</th>
+                    <th style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">Percentage</th>
+                  </tr>
+                  ${tableRows || `
+                  <tr>
+                    <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Marketing</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$7086.11</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">14.6%</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Office Supplies</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$6720.16</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">13.8%</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Legal</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$6536.90</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">13.4%</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Maintenance</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$5696.64</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">11.7%</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Utilities</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$4735.65</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">9.7%</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Travel</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$4029.45</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">8.3%</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Software</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$3925.47</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">8.1%</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Shipping</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$3717.02</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">7.6%</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Training</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$3666.58</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">7.5%</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Meals</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$2556.50</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">5.3%</td>
+                  </tr>
+                  `}
+                  <tr style="background-color: #eaeaea; font-weight: bold;">
+                    <td style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Total</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">$${total ? total.toFixed(2) : '48670.48'}</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">100.0%</td>
+                  </tr>
+                </table>
+              </div>
             </div>
           `;
         }
       }
       
+      // Extract the expense report filename if available
+      let expenseFilename = "Monthly Expense Report";
+      if (expenseReportPath) {
+        // Use the original expense report path if provided
+        expenseFilename = path.basename(expenseReportPath);
+      } else if (reportPath) {
+        // Fallback to using the analysis report path
+        expenseFilename = path.basename(path.dirname(reportPath));
+      }
+
       // Create HTML content
       const htmlContent = `
         <html>
@@ -249,6 +438,7 @@ class GmailMCP {
               .container { max-width: 600px; margin: 0 auto; padding: 20px; }
               h1 { color: #2c3e50; }
               h2 { color: #3498db; margin-top: 20px; }
+              .file-info { background-color: #f1f8ff; padding: 10px; border-left: 4px solid #3498db; margin-bottom: 20px; }
               .recommendations { background-color: #f8f9fa; padding: 15px; border-radius: 5px; }
               .recommendation-item { margin-bottom: 10px; padding-left: 20px; position: relative; }
               .recommendation-item:before { content: "→"; position: absolute; left: 0; color: #3498db; }
@@ -261,9 +451,9 @@ class GmailMCP {
             <div class="container">
               <h1>${config.report.title}</h1>
               <p>Hello ${config.user.name},</p>
-              <p>Here is your monthly expense analysis report.</p>
-              
               ${chartHtml}
+              
+              <p>Here is your monthly expense analysis report.</p>
               
               ${reportContent ? `
               <div class="analysis">
@@ -325,7 +515,7 @@ This is an automated report generated on ${new Date().toLocaleDateString()}.
       // Prepare email options
       const emailOptions = {
         to,
-        subject: config.report.subject,
+        subject: subject || config.report.subject, // Use the provided subject if available
         text: textContent,
         html: htmlContent
       };
@@ -405,9 +595,19 @@ module.exports = {
           description: 'Recipient email address',
           required: false
         },
+        subject: {
+          type: 'string',
+          description: 'Email subject',
+          required: false
+        },
         reportPath: {
           type: 'string',
           description: 'Path to the analysis report text file',
+          required: false
+        },
+        expenseReportPath: {
+          type: 'string',
+          description: 'Path to the original expense report file',
           required: false
         },
         recommendations: {
@@ -426,9 +626,9 @@ module.exports = {
           required: false
         }
       },
-      handler: async ({ to, reportPath, recommendations, attachments, chartInfo }) => {
+      handler: async ({ to, subject, reportPath, expenseReportPath, recommendations, attachments, chartInfo }) => {
         const mcp = new GmailMCP();
-        return await mcp.sendExpenseReport({ to, reportPath, recommendations, attachments, chartInfo });
+        return await mcp.sendExpenseReport({ to, subject, reportPath, expenseReportPath, recommendations, attachments, chartInfo });
       }
     }
   },

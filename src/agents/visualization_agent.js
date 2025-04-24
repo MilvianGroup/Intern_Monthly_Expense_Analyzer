@@ -45,7 +45,16 @@ class VisualizationAgent {
       .sort((a, b) => b[1] - a[1]);
     
     // Prepare data for Chart.js
-    const labels = sortedCategories.map(([category]) => category);
+    const colorNames = [
+      'Red', 'Blue', 'Yellow', 'Teal', 'Purple', 
+      'Orange', 'Grey', 'Green', 'Bright Yellow', 'Magenta',
+      'Mint', 'Light Blue', 'Dark Red', 'Brown', 'Dark Green'
+    ];
+    
+    const labels = sortedCategories.map(([category], index) => {
+      const colorIndex = index % this.colors.length;
+      return `${category} (${colorNames[colorIndex]})`;
+    });
     const data = sortedCategories.map(([, amount]) => amount);
     const backgroundColors = sortedCategories.map((_, index) => 
       this.colors[index % this.colors.length]
@@ -271,13 +280,22 @@ class VisualizationAgent {
     visualization += `Category Breakdown:\n`;
     visualization += `${'='.repeat(18)}\n\n`;
     
+    // Color names for reference
+    const colorNames = [
+      'Red', 'Blue', 'Yellow', 'Teal', 'Purple', 
+      'Orange', 'Grey', 'Green', 'Bright Yellow', 'Magenta',
+      'Mint', 'Light Blue', 'Dark Red', 'Brown', 'Dark Green'
+    ];
+    
     // Add each category with a simple bar chart
-    sortedCategories.forEach(([category, amount]) => {
+    sortedCategories.forEach(([category, amount], index) => {
       const percentage = amount / total;
       const barLength = Math.round(percentage * 50); // Max bar length of 50 characters
       const bar = '#'.repeat(barLength);
+      const colorIndex = index % this.colors.length;
+      const colorName = colorNames[colorIndex];
       
-      visualization += `${category.padEnd(20)} $${amount.toFixed(2).padStart(10)} `;
+      visualization += `${category.padEnd(15)} (${colorName.padEnd(12)}) $${amount.toFixed(2).padStart(10)} `;
       visualization += `${(percentage * 100).toFixed(1).padStart(5)}% ${bar}\n`;
     });
     

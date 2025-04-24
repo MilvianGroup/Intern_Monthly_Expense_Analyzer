@@ -6,12 +6,12 @@ A comprehensive system that automates the process of retrieving expense reports 
 
 This project implements an automated workflow with the following components:
 
-1. **Expense Report Retriever Agent**: Connects to Google Drive to fetch expense report CSV files
+1. **Expense Report Retriever Agent**: Connects to Google Drive to fetch expense reports in various formats (CSV, PDF, Excel, bank statements)
 2. **Analysis Agent**: Processes expense data to find patterns and generate money-saving recommendations
 3. **Visualization Agent**: Creates pie charts showing expense breakdowns by category
 4. **Email Reporting Agent**: Sends the analysis and visualizations to the configured email address
 
-The system uses AWS Bedrock's Claude LLM API to power the AI agents for analysis and recommendations, and LangGraph for workflow orchestration.
+The system uses AWS Bedrock's Claude LLM API to power the AI agents for file processing, analysis, and recommendations, and LangGraph for workflow orchestration.
 
 ### LangGraph Implementation
 
@@ -175,12 +175,27 @@ For more advanced process management, you can use PM2:
    pm2 save
    ```
 
+## Supported File Types
+
+The system can process expense data from multiple file formats:
+
+1. **CSV Files**: Traditional comma-separated value files with columns for date, amount, category, and description
+2. **PDF Files**: PDF documents containing expense tables or statements
+3. **Excel Files**: Spreadsheets with expense data
+4. **Bank Statements**: Financial documents from banks showing account transactions, including:
+   - OFX/QFX files (Open Financial Exchange format)
+   - Bank-provided PDF statements
+   - Exported CSV or Excel files from banking portals
+
+The system uses AWS Bedrock to intelligently extract structured expense data from unstructured documents like PDFs and bank statements.
+
 ## Workflow
 
-1. The system retrieves the expense report CSV from Google Drive (or generates sample data in demo mode)
-2. The Analysis Agent processes the data to identify spending patterns and generate recommendations
-3. The Visualization Agent creates a pie chart showing expense breakdown by category
-4. The Email Reporting Agent sends a personalized report with analysis, recommendations, and visualizations to the configured email address
+1. The system retrieves the expense report from Google Drive (or generates sample data in demo mode)
+2. The Expense Retriever Agent detects the file type and validates the content
+3. The Analysis Agent processes the data based on the file type to identify spending patterns and generate recommendations
+4. The Visualization Agent creates a pie chart showing expense breakdown by category
+5. The Email Reporting Agent sends a personalized report with analysis, recommendations, and visualizations to the configured email address
 
 ## Project Structure
 

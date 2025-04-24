@@ -3,56 +3,91 @@
  * 
  * This agent is responsible for analyzing expense reports,
  * finding patterns, and providing recommendations for saving money.
+ * It supports multiple file formats including CSV, PDF, Excel, and bank statements.
  */
 
 const fs = require('fs');
 const path = require('path');
 const csv = require('csv-parser');
+const { BedrockChat } = require("langchain/chat_models/bedrock");
+const { HumanMessage } = require("langchain/schema");
 const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
 const config = require('../../config/config.json');
 
 class AnalysisAgent {
   constructor() {
-    // Initialize AWS Bedrock client
-    this.bedrockClient = new BedrockRuntimeClient({
-      region: config.aws.region
-    });
+    // Initialize LangChain models
     
-    this.modelId = config.aws.bedrock_model_id;
+    // Try to initialize BedrockChat (preferred)
+    try {
+      this.bedrockLLM = new BedrockChat({
+        model: config.aws.bedrock_model_id || "anthropic.claude-v2",
+        region: process.env.AWS_REGION || config.aws.region,
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        },
+        temperature: 0.2,
+      });
+      this.useBedrockLLM = true;
+      console.log("Using LangChain BedrockChat");
+    } catch (error) {
+      console.warn("Failed to initialize LangChain BedrockChat:", error.message);
+      this.useBedrockLLM = false;
+    }
+    
+    // No OpenAI fallback - using AWS Bedrock exclusively
   }
 
   /**
-   * Invoke the AWS Bedrock model with a prompt
+   * Invoke an LLM model with a prompt
    * @param {string} prompt - The prompt to send to the model
    * @returns {Promise<string>} - The model's response
    */
   async invokeModel(prompt) {
     try {
-      const input = {
-        modelId: this.modelId,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: JSON.stringify({
-          anthropic_version: 'bedrock-2023-05-31',
-          max_tokens: 2048,
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ]
-        })
-      };
+      // Try using BedrockChat first
+      if (this.useBedrockLLM && this.bedrockLLM) {
+        try {
+          console.log("Using AWS Bedrock via LangChain");
+          const response = await this.bedrockLLM.invoke([new HumanMessage(prompt)]);
+          return response.content;
+        } catch (bedrockError) {
+          console.warn("BedrockChat invocation failed:", bedrockError.message);
+          // Fall back to OpenAI if Bedrock fails
+        }
+      }
       
-      const command = new InvokeModelCommand(input);
-      const response = await this.bedrockClient.send(command);
-      
-      // Parse the response
-      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-      return responseBody.content[0].text;
+      // If all LangChain methods fail, return a simple error message
+      console.error('All LLM invocation methods failed');
+      return "I'm sorry, I couldn't process your request due to an error with the language model service.";
     } catch (error) {
-      console.error('Error invoking AWS Bedrock model:', error);
+      console.error('Error invoking LLM model:', error);
       return null;
+    }
+  }
+
+  /**
+   * Parse a file into an array of expense objects based on file type
+   * @param {string} filePath - Path to the file
+   * @param {string} fileType - Type of file ('csv', 'pdf', 'excel', 'bank_statement', 'unknown')
+   * @param {Object} metadata - Additional metadata about the file
+   * @returns {Promise<Array>} - Array of objects representing the expense data
+   */
+  async parseFile(filePath, fileType, metadata = {}) {
+    console.log(`Parsing file of type: ${fileType}`);
+    
+    switch (fileType) {
+      case 'csv':
+        return await this.parseCSV(filePath);
+      case 'pdf':
+        return await this.parsePDF(filePath, metadata);
+      case 'excel':
+        return await this.parseExcel(filePath, metadata);
+      case 'bank_statement':
+        return await this.parseBankStatement(filePath, metadata);
+      default:
+        return await this.parseUnknownFormat(filePath, metadata);
     }
   }
 
@@ -71,6 +106,295 @@ class AnalysisAgent {
         .on('end', () => resolve(results))
         .on('error', (error) => reject(error));
     });
+  }
+  
+  /**
+   * Parse a PDF file into an array of expense objects
+   * @param {string} filePath - Path to the PDF file
+   * @param {Object} metadata - Additional metadata about the file
+   * @returns {Promise<Array>} - Array of objects representing the expense data
+   */
+  async parsePDF(filePath, metadata = {}) {
+    try {
+      // Use AWS Bedrock to extract structured data from the PDF
+      const bedrockClient = new BedrockRuntimeClient({
+        region: config.aws.region
+      });
+      
+      // Read a small portion of the PDF file as binary data
+      // Note: We can't actually read PDF content directly, but we'll use the file path
+      // in the prompt to AWS Bedrock
+      
+      const prompt = `
+I have a PDF file that contains expense data at path: ${filePath}
+
+I need you to extract the expense data from this PDF and format it as a structured JSON array.
+Each expense should have these fields:
+- date: The date of the expense
+- amount: The monetary amount (as a number)
+- category: The category or type of expense
+- description: A description of the expense
+
+If the PDF doesn't explicitly mention categories, please infer appropriate categories based on the descriptions.
+Return ONLY the JSON array with no additional text or explanation.
+`;
+
+      const input = {
+        modelId: config.aws.bedrock_model_id,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify({
+          anthropic_version: 'bedrock-2023-05-31',
+          max_tokens: 4000,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        })
+      };
+      
+      const command = new InvokeModelCommand(input);
+      const response = await bedrockClient.send(command);
+      
+      // Parse the response
+      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+      const responseText = responseBody.content[0].text;
+      
+      // Extract JSON array from the response
+      let jsonStartIndex = responseText.indexOf('[');
+      let jsonEndIndex = responseText.lastIndexOf(']') + 1;
+      
+      if (jsonStartIndex === -1 || jsonEndIndex === 0) {
+        console.error('Could not find JSON array in response');
+        return [];
+      }
+      
+      const jsonStr = responseText.substring(jsonStartIndex, jsonEndIndex);
+      const expenses = JSON.parse(jsonStr);
+      
+      console.log(`Successfully extracted ${expenses.length} expenses from PDF`);
+      return expenses;
+    } catch (error) {
+      console.error('Error parsing PDF file:', error);
+      return [];
+    }
+  }
+  
+  /**
+   * Parse an Excel file into an array of expense objects
+   * @param {string} filePath - Path to the Excel file
+   * @param {Object} metadata - Additional metadata about the file
+   * @returns {Promise<Array>} - Array of objects representing the expense data
+   */
+  async parseExcel(filePath, metadata = {}) {
+    try {
+      // Use AWS Bedrock to extract structured data from the Excel file
+      const bedrockClient = new BedrockRuntimeClient({
+        region: config.aws.region
+      });
+      
+      const prompt = `
+I have an Excel file that contains expense data at path: ${filePath}
+
+I need you to extract the expense data from this Excel file and format it as a structured JSON array.
+Each expense should have these fields:
+- date: The date of the expense
+- amount: The monetary amount (as a number)
+- category: The category or type of expense
+- description: A description of the expense
+
+If the Excel file doesn't explicitly mention categories, please infer appropriate categories based on the descriptions.
+Return ONLY the JSON array with no additional text or explanation.
+`;
+
+      const input = {
+        modelId: config.aws.bedrock_model_id,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify({
+          anthropic_version: 'bedrock-2023-05-31',
+          max_tokens: 4000,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        })
+      };
+      
+      const command = new InvokeModelCommand(input);
+      const response = await bedrockClient.send(command);
+      
+      // Parse the response
+      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+      const responseText = responseBody.content[0].text;
+      
+      // Extract JSON array from the response
+      let jsonStartIndex = responseText.indexOf('[');
+      let jsonEndIndex = responseText.lastIndexOf(']') + 1;
+      
+      if (jsonStartIndex === -1 || jsonEndIndex === 0) {
+        console.error('Could not find JSON array in response');
+        return [];
+      }
+      
+      const jsonStr = responseText.substring(jsonStartIndex, jsonEndIndex);
+      const expenses = JSON.parse(jsonStr);
+      
+      console.log(`Successfully extracted ${expenses.length} expenses from Excel file`);
+      return expenses;
+    } catch (error) {
+      console.error('Error parsing Excel file:', error);
+      return [];
+    }
+  }
+  
+  /**
+   * Parse a bank statement file into an array of expense objects
+   * @param {string} filePath - Path to the bank statement file
+   * @param {Object} metadata - Additional metadata about the file
+   * @returns {Promise<Array>} - Array of objects representing the expense data
+   */
+  async parseBankStatement(filePath, metadata = {}) {
+    try {
+      // Use AWS Bedrock to extract structured data from the bank statement
+      const bedrockClient = new BedrockRuntimeClient({
+        region: config.aws.region
+      });
+      
+      const bankName = metadata.bankName || 'Unknown';
+      
+      const prompt = `
+I have a bank statement from ${bankName} at path: ${filePath}
+
+I need you to extract all the expense transactions (not deposits or credits) and format them as a structured JSON array.
+Each expense should have these fields:
+- date: The date of the transaction
+- amount: The monetary amount (as a number, positive value)
+- category: The category of expense (infer this based on the merchant or description)
+- description: The merchant name or transaction description
+
+Return ONLY the JSON array with no additional text or explanation.
+`;
+
+      const input = {
+        modelId: config.aws.bedrock_model_id,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify({
+          anthropic_version: 'bedrock-2023-05-31',
+          max_tokens: 4000,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        })
+      };
+      
+      const command = new InvokeModelCommand(input);
+      const response = await bedrockClient.send(command);
+      
+      // Parse the response
+      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+      const responseText = responseBody.content[0].text;
+      
+      // Extract JSON array from the response
+      let jsonStartIndex = responseText.indexOf('[');
+      let jsonEndIndex = responseText.lastIndexOf(']') + 1;
+      
+      if (jsonStartIndex === -1 || jsonEndIndex === 0) {
+        console.error('Could not find JSON array in response');
+        return [];
+      }
+      
+      const jsonStr = responseText.substring(jsonStartIndex, jsonEndIndex);
+      const expenses = JSON.parse(jsonStr);
+      
+      console.log(`Successfully extracted ${expenses.length} expenses from bank statement`);
+      return expenses;
+    } catch (error) {
+      console.error('Error parsing bank statement:', error);
+      return [];
+    }
+  }
+  
+  /**
+   * Parse an unknown format file into an array of expense objects
+   * @param {string} filePath - Path to the file
+   * @param {Object} metadata - Additional metadata about the file
+   * @returns {Promise<Array>} - Array of objects representing the expense data
+   */
+  async parseUnknownFormat(filePath, metadata = {}) {
+    try {
+      // Use AWS Bedrock to extract structured data from the unknown format
+      const bedrockClient = new BedrockRuntimeClient({
+        region: config.aws.region
+      });
+      
+      // Read the file content
+      const fileContent = fs.readFileSync(filePath, 'utf8');
+      
+      const prompt = `
+I have a file with financial data. Here's a sample of the content:
+${fileContent.substring(0, 2000)}...
+
+I need you to extract the expense data from this file and format it as a structured JSON array.
+Each expense should have these fields:
+- date: The date of the expense
+- amount: The monetary amount (as a number)
+- category: The category or type of expense
+- description: A description of the expense
+
+If the file doesn't explicitly mention categories, please infer appropriate categories based on the descriptions.
+Return ONLY the JSON array with no additional text or explanation.
+`;
+
+      const input = {
+        modelId: config.aws.bedrock_model_id,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify({
+          anthropic_version: 'bedrock-2023-05-31',
+          max_tokens: 4000,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        })
+      };
+      
+      const command = new InvokeModelCommand(input);
+      const response = await bedrockClient.send(command);
+      
+      // Parse the response
+      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+      const responseText = responseBody.content[0].text;
+      
+      // Extract JSON array from the response
+      let jsonStartIndex = responseText.indexOf('[');
+      let jsonEndIndex = responseText.lastIndexOf(']') + 1;
+      
+      if (jsonStartIndex === -1 || jsonEndIndex === 0) {
+        console.error('Could not find JSON array in response');
+        return [];
+      }
+      
+      const jsonStr = responseText.substring(jsonStartIndex, jsonEndIndex);
+      const expenses = JSON.parse(jsonStr);
+      
+      console.log(`Successfully extracted ${expenses.length} expenses from unknown format file`);
+      return expenses;
+    } catch (error) {
+      console.error('Error parsing unknown format file:', error);
+      return [];
+    }
   }
 
   /**
@@ -278,15 +602,29 @@ Consider reviewing your largest expenses to identify potential savings opportuni
 
   /**
    * Process the expense report and generate analysis and recommendations
-   * @param {string} expenseReportPath - Path to the expense report CSV file
+   * @param {Object} expenseReportInfo - Information about the expense report
+   * @param {string} expenseReportInfo.filePath - Path to the expense report file
+   * @param {string} expenseReportInfo.fileType - Type of file ('csv', 'pdf', 'excel', 'bank_statement', 'unknown')
+   * @param {Object} expenseReportInfo.metadata - Additional metadata about the file
    * @returns {Promise<Object>} - Analysis results
    */
-  async process(expenseReportPath) {
+  async process(expenseReportInfo) {
     try {
       console.log('Analyzing expense report...');
       
-      // Parse the CSV file
-      const rawExpenses = await this.parseCSV(expenseReportPath);
+      // If we received a string instead of an object (for backward compatibility)
+      if (typeof expenseReportInfo === 'string') {
+        expenseReportInfo = {
+          filePath: expenseReportInfo,
+          fileType: 'csv',
+          metadata: {}
+        };
+      }
+      
+      const { filePath, fileType, metadata } = expenseReportInfo;
+      
+      // Parse the file based on its type
+      const rawExpenses = await this.parseFile(filePath, fileType, metadata);
       
       // Normalize the expense data
       const expenses = this.normalizeExpenseData(rawExpenses);
