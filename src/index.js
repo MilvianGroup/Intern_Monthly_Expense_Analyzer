@@ -18,8 +18,8 @@ const fs = require('fs');
 // Import helpers
 const { ensureDirectoryExists } = require('./utils/helpers');
 
-// Import LangGraph workflow
 const { runFinancialWorkflow } = require('./workflow/financial_workflow');
+const { processCSV } = require('./utils/csv_processor');
 
 // Create necessary directories
 ensureDirectoryExists(path.join(__dirname, '../temp'));
@@ -33,7 +33,14 @@ async function runWorkflow() {
     // Check if we're in demo/test mode
     const isDemoMode = process.env.DEMO_MODE === 'true' || process.argv.includes('--demo');
     
-    // Run the LangGraph workflow
+    if (isDemoMode) {
+      console.log('Running in demo mode...');
+    } else {
+      console.log('Processing CSV file...');
+      const { stats } = await processCSV(path.join(__dirname, '../TestData.csv'));
+      console.log('\nCSV Analysis Results:', stats);
+    }
+
     await runFinancialWorkflow({ isDemoMode });
     
   } catch (error) {

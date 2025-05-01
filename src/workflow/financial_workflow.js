@@ -159,6 +159,12 @@ function createFinancialWorkflow() {
     } else {
       // New format - object with filePath, fileType, and metadata
       expenseReportInfo = expenseReportPath;
+      
+      // Log detected headers if available
+      if (expenseReportInfo.metadata && expenseReportInfo.metadata.headers) {
+        console.log('Using detected headers from expense report:',
+          expenseReportInfo.metadata.headers);
+      }
     }
     
     const analysisResults = await analyzeExpense(expenseReportInfo);
@@ -174,6 +180,11 @@ function createFinancialWorkflow() {
     } else {
       analysisResults.expenseReportInfo = expenseReportPath;
       analysisResults.expenseReportPath = expenseReportPath.filePath;
+    }
+    
+    // Log detected categories if available
+    if (analysisResults.detectedCategories && analysisResults.detectedCategories.length > 0) {
+      console.log('Categories detected from data:', analysisResults.detectedCategories);
     }
     
     return { analysisResults };
@@ -246,7 +257,13 @@ function createFinancialWorkflow() {
     console.log('Analysis completed successfully');
     console.log(`Total expenses: $${analysisResults.summary.total.toFixed(2)}`);
     console.log(`Number of expenses: ${analysisResults.summary.count}`);
-    console.log(`Top spending categories:`);
+    
+    // Print detected headers if available
+    if (analysisResults.headers && analysisResults.headers.length > 0) {
+      console.log(`\nDetected headers: ${analysisResults.headers.join(', ')}`);
+    }
+    
+    console.log(`\nTop spending categories:`);
     
     Object.entries(analysisResults.summary.categories)
       .sort((a, b) => b[1] - a[1])

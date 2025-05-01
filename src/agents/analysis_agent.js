@@ -21,7 +21,7 @@ class AnalysisAgent {
     // Try to initialize BedrockChat (preferred)
     try {
       this.bedrockLLM = new BedrockChat({
-        model: config.aws.bedrock_model_id || "anthropic.claude-v2",
+        model: config.aws.bedrock_model_id || "anthropic.claude-3-5-sonnet-20241022-v2:0",
         region: process.env.AWS_REGION || config.aws.region,
         credentials: {
           accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -99,11 +99,30 @@ class AnalysisAgent {
   async parseCSV(filePath) {
     return new Promise((resolve, reject) => {
       const results = [];
+      let headers = [];
+      let headersParsed = false;
       
       fs.createReadStream(filePath)
         .pipe(csv())
-        .on('data', (data) => results.push(data))
-        .on('end', () => resolve(results))
+        .on('data', (data) => {
+          // Store the headers from the first row
+          if (!headersParsed) {
+            headers = Object.keys(data);
+            headersParsed = true;
+            console.log('CSV Headers detected:', headers);
+          }
+          results.push(data);
+        })
+        .on('end', () => {
+          // Add headers to the results metadata
+          const resultsWithMetadata = {
+            data: results,
+            metadata: {
+              headers: headers
+            }
+          };
+          resolve(resultsWithMetadata);
+        })
         .on('error', (error) => reject(error));
     });
   }
@@ -402,49 +421,153 @@ Return ONLY the JSON array with no additional text or explanation.
    * @param {Array} expenses - Array of expense objects
    * @returns {Array} - Normalized expense objects
    */
-  normalizeExpenseData(expenses) {
-    if (!expenses || expenses.length === 0) {
-      return [];
-    }
-    
-    // Get the first expense to determine field names
-    const firstExpense = expenses[0];
-    const keys = Object.keys(firstExpense);
-    
-    // Find the appropriate field names
-    const dateField = keys.find(k => k.toLowerCase().includes('date'));
-    const amountField = keys.find(k => 
-      k.toLowerCase().includes('amount') || 
-      k.toLowerCase().includes('cost') || 
-      k.toLowerCase().includes('price')
-    );
-    const categoryField = keys.find(k => 
-      k.toLowerCase().includes('category') || 
-      k.toLowerCase().includes('type')
-    );
-    const descriptionField = keys.find(k => 
-      k.toLowerCase().includes('description') || 
-      k.toLowerCase().includes('desc') || 
-      k.toLowerCase().includes('item')
-    );
-    
-    // Normalize the data
-    return expenses.map(expense => {
-      // Parse amount to number
-      let amount = expense[amountField];
-      if (typeof amount === 'string') {
-        // Remove currency symbols and commas
-        amount = amount.replace(/[$,£€]/g, '');
-        amount = parseFloat(amount);
+  normalizeExpenseData(expensesData) {
+      // Handle the new format with metadata
+      let expenses = Array.isArray(expensesData) ? expensesData : expensesData.data;
+      let headers = expensesData.metadata?.headers || [];
+      
+      if (!expenses || expenses.length === 0) {
+        return [];
+      }
+      
+      console.log('Normalizing expense data with detected headers:', headers);
+      
+      // Get the first expense to determine field names
+      const firstExpense = expenses[0];
+      const keys = Object.keys(firstExpense);
+      
+      // Find the appropriate field names dynamically based on the actual headers
+      const dateField = keys.find(k =>
+        k.toLowerCase().includes('date') ||
+        k.toLowerCase().includes('time') ||
+        k.toLowerCase().includes('when')
+      );
+      
+      // First try to find exact match for "Amount (by category)" which is the main amount field in TestData.csv
+      let amountField = keys.find(k => k === 'Amount (by category)');
+      
+      // If not found, fall back to more general search
+      if (!amountField) {
+        amountField = keys.find(k =>
+          k.toLowerCase().includes('amount') ||
+          k.toLowerCase().includes('cost') ||
+          k.toLowerCase().includes('price') ||
+          k.toLowerCase().includes('value') ||
+          k.toLowerCase().includes('charge')
+        );
+      }
+      
+      // Debug: Print the first few rows with their amount fields to verify
+      console.log('First row amount field value:', firstExpense[amountField]);
+      if (expenses.length > 1) {
+        console.log('Second row amount field value:', expenses[1][amountField]);
+      }
+      
+      // Use all available category-like fields
+      const categoryFields = keys.filter(k =>
+        k.toLowerCase().includes('category') ||
+        k.toLowerCase().includes('type') ||
+        k.toLowerCase().includes('department') ||
+        k.toLowerCase().includes('group') ||
+        k.toLowerCase().includes('class')
+      );
+      
+      const descriptionField = keys.find(k =>
+        k.toLowerCase().includes('description') ||
+        k.toLowerCase().includes('desc') ||
+        k.toLowerCase().includes('item') ||
+        k.toLowerCase().includes('memo') ||
+        k.toLowerCase().includes('note') ||
+        k.toLowerCase().includes('vendor') ||
+        k.toLowerCase().includes('merchant')
+      );
+      
+      console.log('Mapped fields:');
+      console.log(`- Date field: ${dateField}`);
+      console.log(`- Amount field: ${amountField}`);
+      console.log(`- Category fields: ${categoryFields.join(', ')}`);
+      console.log(`- Description field: ${descriptionField}`);
+      
+      let invalidAmountCount = 0;
+      
+      // Normalize the data
+      const normalizedExpenses = expenses.map((expense, index) => {
+        // Parse amount to number
+        let amount = expense[amountField];
+        
+        // Debug the first few rows to see what's happening
+        if (index < 5) {
+          console.log(`Row ${index} - Raw amount value: "${amount}" (${typeof amount})`);
+        }
+        
+        if (typeof amount === 'string') {
+          // Remove currency symbols and commas
+          amount = amount.replace(/[$,£€]/g, '');
+          // Try to parse as float
+          amount = parseFloat(amount);
+          
+          if (index < 5) {
+            console.log(`Row ${index} - Parsed amount value: ${amount}`);
+          }
+        }
+
+        // Only set to 0 if it's actually NaN, not if it's a valid 0 value
+        if (isNaN(amount)) {
+          invalidAmountCount++;
+          if (invalidAmountCount <= 5) {
+            // Only log the first 5 invalid amounts to avoid console spam
+            console.warn(`Invalid amount detected in row ${index}:`, expense);
+            console.warn(`  Amount field: ${amountField}, Value: "${expense[amountField]}"`);
+          } else if (invalidAmountCount === 6) {
+            console.warn(`Additional invalid amounts detected (suppressing further warnings)`);
+          }
+          amount = 0;
+        }
+      
+      // Use the first non-empty category field value
+      let category = 'Uncategorized';
+      for (const catField of categoryFields) {
+        if (expense[catField] && expense[catField].trim()) {
+          category = expense[catField].trim();
+          break;
+        }
+      }
+      
+      // If no description field is found, try to use vendor or another meaningful field
+      let description = expense[descriptionField] || '';
+      if (!description && expense['Vendor name']) {
+        description = expense['Vendor name'];
+      } else if (!description) {
+        // Find any field that might contain useful description information
+        const potentialDescFields = keys.filter(k =>
+          !k.toLowerCase().includes('date') &&
+          !k.toLowerCase().includes('amount') &&
+          !categoryFields.includes(k) &&
+          expense[k] &&
+          typeof expense[k] === 'string' &&
+          expense[k].trim().length > 0
+        );
+        
+        if (potentialDescFields.length > 0) {
+          description = expense[potentialDescFields[0]];
+        }
       }
       
       return {
-        date: expense[dateField],
-        amount: isNaN(amount) ? 0 : amount,
-        category: expense[categoryField] || 'Uncategorized',
-        description: expense[descriptionField] || ''
+        date: expense[dateField] || 'Unknown Date',
+        amount: amount,
+        category: category,
+        description: description || 'No Description',
+        // Include all original fields for reference
+        originalData: {...expense}
       };
     });
+    
+    if (invalidAmountCount > 0) {
+      console.warn(`Total invalid amounts detected: ${invalidAmountCount} out of ${expenses.length} rows (${((invalidAmountCount/expenses.length)*100).toFixed(2)}%)`);
+    }
+    
+    return normalizedExpenses;
   }
 
   /**
@@ -624,10 +747,29 @@ Consider reviewing your largest expenses to identify potential savings opportuni
       const { filePath, fileType, metadata } = expenseReportInfo;
       
       // Parse the file based on its type
-      const rawExpenses = await this.parseFile(filePath, fileType, metadata);
+      const rawExpensesData = await this.parseFile(filePath, fileType, metadata);
+      
+      // Extract headers if available from the parsed data
+      let headers = [];
+      let rawExpenses = rawExpensesData;
+      
+      // Check if the result has the new format with metadata
+      if (rawExpensesData && rawExpensesData.metadata && rawExpensesData.data) {
+        headers = rawExpensesData.metadata.headers || [];
+        rawExpenses = rawExpensesData.data;
+        console.log('Headers detected from file:', headers);
+      }
+      
+      // Add headers to metadata if they were detected
+      if (headers.length > 0) {
+        expenseReportInfo.metadata = {
+          ...expenseReportInfo.metadata,
+          headers
+        };
+      }
       
       // Normalize the expense data
-      const expenses = this.normalizeExpenseData(rawExpenses);
+      const expenses = this.normalizeExpenseData(rawExpensesData);
       
       // Generate summary
       const summary = this.generateSummary(expenses);
@@ -654,7 +796,9 @@ Consider reviewing your largest expenses to identify potential savings opportuni
         summary,
         recommendations,
         analysis,
-        analysisPath
+        analysisPath,
+        headers, // Include the detected headers in the result
+        detectedCategories: Object.keys(summary.categories) // Include the detected categories
       };
     } catch (error) {
       console.error('Error processing expense report for analysis:', error);
